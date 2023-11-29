@@ -19,7 +19,6 @@ myXCrawl.startPolling({ d: 1 }, async (count, stopPolling) => {
   // 通过遍历爬取的页面结果获取图片URL
   const imgUrls: string[] = []
   for (const item of pageResults) {
-    const { id } = item
     const { page } = item.data
     const elSelector = `#gallery a[itemprop="url"]`
     // 等待页面元素出现
@@ -36,10 +35,9 @@ myXCrawl.startPolling({ d: 1 }, async (count, stopPolling) => {
     })
     console.log('urls', urls)
     // 给这些所有的图片url添加download path后缀
-    for (let i = 0; i < urls.length; i++) {
-      urls[i] = urls[i] + "/download"
-    }
-    imgUrls.push(...urls as string[])
+    urls.forEach((item) => {
+      imgUrls.push(`${item}/download`)
+    })
 
     // 关闭页面
     page.close()
@@ -47,7 +45,38 @@ myXCrawl.startPolling({ d: 1 }, async (count, stopPolling) => {
 
   // 再次爬取每一个图片URL
   const imgResults = await myXCrawl.crawlPage({
-    targets: imgUrls,
+    targets: imgUrls.slice(0,10),// 只爬取前10张图片
     viewport: { width: 1920, height: 1080 }
   })
+
+  const imgData:string[] = []
+
+  for (let item of imgResults) {
+    const { data } = item;
+    const {page} = data;
+    
+    // 等待指定图片展示完毕
+    await page.waitForSelector(`#show_img`)
+
+    // 爬取图片资源
+    await page.$eval(`#show_img`,(imgEl => {
+      console.log('imgEl',imgEl);
+      return imgEl.getAttribute('src')
+    })).then((res) => {
+      imgData.push(res as string)
+    })
+  
+    // 关闭页面
+    page.close()
+  }
+
+  // 使用x-crawl的crawlFile API下载图片并保存到github仓库
+  myXCrawl
+  .crawlFile({
+    targets: imgData,
+    storeDirs: './upload',
+    intervalTime: { max: 3000, min: 1000 },
+    maxRetry: 1
+  })
+  .then((res) => {})
 })
